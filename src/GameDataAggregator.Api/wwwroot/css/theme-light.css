@@ -1,0 +1,42 @@
+/*
+  Tier 2: semantic tokens for the light theme. Each name says what a colour is for, and points to a primitive token
+  from tokens.css. This is also the default, used before the page has picked a theme.
+*/
+:root,
+:root[data-color-scheme="light"] {
+  color-scheme: light;
+
+  /* Page, surfaces and text. */
+  --bg: var(--gray-50);
+  --surface: var(--gray-0);
+  --surface-2: var(--gray-100);
+  --border: var(--gray-200);
+  --text: var(--gray-900);
+  --muted: var(--gray-600);
+
+  /* Brand colour, for buttons, links and chosen options. */
+  --accent: var(--indigo-600);
+  --accent-text: var(--gray-0);
+  --accent-soft: var(--indigo-50);
+
+  /* Source statuses, each with a strong colour for text and a soft one for its background. */
+  --live: var(--green-700);
+  --live-soft: var(--green-100);
+  --cached: var(--blue-700);
+  --cached-soft: var(--blue-100);
+  --fallback: var(--amber-700);
+  --fallback-soft: var(--amber-100);
+  --failed: var(--red-700);
+  --failed-soft: var(--red-100);
+
+  /* Speed groups in the statistics. */
+  --fast: var(--green-600);
+  --average: var(--amber-600);
+  --slow: var(--red-600);
+
+  /* Shapes, shadows and fonts. */
+  --radius: var(--radius-md);
+  --shadow: var(--shadow-soft);
+  --font: var(--font-sans);
+  --mono: var(--font-mono);
+}

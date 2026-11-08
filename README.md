@@ -113,6 +113,12 @@ plain HTML, CSS and JavaScript, so there is no build step and nothing to install
   - validation errors shown as returned by the API.
 - **Request URL:** each search shows the exact request it sent, with a **Copy URL** button for Postman or curl. The
   page's own address keeps the search, so a result can be bookmarked or shared.
+- **Themes:** a **Theme** setting in the header offers System, Light and Dark. System follows the device's light or
+  dark setting, and the choice is remembered in the browser. The colours fade briefly when they change, unless the
+  device asks for less motion.
+- **Layouts:** the page has three layouts, picked by the window's width: wide (above 640 px), medium (481 to 640 px)
+  and narrow (up to 480 px). It works without sideways scrolling down to 320 px, the width the WCAG reflow rule asks
+  for.
 - **Statistics tab:** the per-API statistics table with the fast, average and slow buckets, with optional
   auto-refresh.
 - **Safe rendering:** data from external APIs is always inserted as text, never as HTML. Links and images are

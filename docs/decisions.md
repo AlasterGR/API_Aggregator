@@ -42,6 +42,7 @@ reasoning history stays readable.
 | [DEC-032](#dec-032-the-twitch-token-request-gets-one-try-that-fits-inside-the-sources-attempt) | 2026-11-08 | The Twitch token request gets one try that fits inside the source's attempt |
 | [DEC-033](#dec-033-sources-declare-their-categories-and-impossible-choices-are-disabled) | 2026-11-08 | Sources declare their categories, and impossible choices are disabled |
 | [DEC-034](#dec-034-the-page-never-searches-with-an-empty-group-of-choices) | 2026-11-09 | The page never searches with an empty group of choices |
+| [DEC-035](#dec-035-two-tier-colour-tokens-three-themes-and-three-layouts) | 2026-11-09 | Two-tier colour tokens, three themes and three layouts |
 
 ---
 
@@ -545,4 +546,33 @@ reasoning history stays readable.
   - **an "All" chip in each group:** also honest, but it adds one more control to each group.
 - **Consequences:** the page always shows what it will search. The Search button can now be disabled for two
   reasons: a search is running, or a group is empty. `updateSearchAvailability` decides both.
+
+## DEC-035: Two-tier colour tokens, three themes and three layouts
+
+- **Context:** backlog item UI-001 asked for switchable themes and three layouts. The CSS had one tier of colour
+  names, such as `--bg`, each holding a raw value, with the dark values repeated in a media query. The page followed
+  only the device's light or dark setting, and had one breakpoint at 600 px.
+- **Decision:**
+  - **Two tiers of tokens.** A token is a named value. `css/tokens.css` holds the primitives, the raw palette named by
+    hue and shade, such as `--gray-50`. `css/theme-light.css` and `css/theme-dark.css` hold the semantic tokens,
+    named by purpose, such as `--bg` and `--accent`, which point to primitives. `site.css` uses only semantic tokens.
+  - **Three themes.** A Theme setting offers System, Light and Dark, and is remembered in `localStorage`. System
+    follows the device, also while the page is open.
+  - **Three layouts.** Wide above 640 px, medium from 481 to 640 px, narrow up to 480 px. The breakpoints come from
+    the backlog.
+  - `js/display.js` runs in `<head>`, before the page is drawn. It sets `data-theme`, `data-color-scheme` and
+    `data-layout` on `<html>`, and the CSS keys on those attributes. So the page never flashes in the wrong
+    colours, and a later manual layout setting only needs to change one attribute.
+  - Every text colour was checked against its background in both themes. All pairs reach at least 4.5 to 1, the
+    WCAG AA level for normal text.
+  - The colour change fades for 0.3 seconds, except when the device asks for less motion.
+- **Alternatives:**
+  - **media queries only:** simpler, but a manual theme or layout choice could not override them.
+  - **one tier of tokens:** fewer names, but each theme would repeat raw values, and a palette change would touch
+    every theme.
+- **Consequences:**
+  - A new theme is one new file that maps the semantic names, plus one option in the picker.
+  - The page needs JavaScript for its colours as well. Without it, it shows the light theme.
+  - A manual layout setting (Auto, Wide, Medium, Narrow) was planned in UI-001, then dropped by the project owner.
+    The page always picks the layout from the window's width.
 

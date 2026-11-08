@@ -56,6 +56,10 @@ public sealed class UiAndSourcesEndpointTests : IAsyncDisposable
     [Theory]
     [InlineData("/", "text/html")]
     [InlineData("/css/site.css", "text/css")]
+    [InlineData("/css/tokens.css", "text/css")]
+    [InlineData("/css/theme-light.css", "text/css")]
+    [InlineData("/css/theme-dark.css", "text/css")]
+    [InlineData("/js/display.js", "text/javascript")]
     [InlineData("/js/app.js", "text/javascript")]
     public async Task Browser_ui_is_served_from_the_root(string path, string mediaType)
     {

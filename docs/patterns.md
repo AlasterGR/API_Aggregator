@@ -378,6 +378,21 @@ Sections:
 - **Why:** an empty page with no reason makes the user guess. Preventing the dead end, and explaining it, follows
   Joe Natoli's principles: clarity, visible feedback and user control.
 
+### Design tokens in two tiers
+
+- **What:** colours and sizes are named values (tokens) in two tiers. Primitives say what a value is (`--gray-50`).
+  Semantic tokens say what it is for (`--bg`), and point to a primitive. Components use only semantic tokens.
+- **Where:** `css/tokens.css` (primitives), `css/theme-light.css` and `css/theme-dark.css` (semantic tokens per
+  theme), `css/site.css` (components). See DEC-035.
+- **Why:** a theme only changes which primitive each purpose points to, so themes never touch the components.
+
+### State on the root element, set before the first paint
+
+- **What:** a small script in `<head>` sets the theme and layout as attributes on `<html>` before the page is drawn,
+  and the CSS keys on them.
+- **Where:** [`display.js`](../src/GameDataAggregator.Api/wwwroot/js/display.js).
+- **Why:** the page never flashes in the wrong colours, and a user's choice can override what the device suggests.
+
 ### Explicit HTTP caching for static files
 
 - **What:** every static file is served with `Cache-Control: no-cache` plus the default `ETag`, so browsers

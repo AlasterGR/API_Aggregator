@@ -1,53 +1,8 @@
-:root {
-  color-scheme: light dark;
-  --bg: #f6f7fb;
-  --surface: #ffffff;
-  --surface-2: #f0f2f8;
-  --border: #e2e5ef;
-  --text: #1b1f2a;
-  --muted: #5d6578;
-  --accent: #4f46e5;
-  --accent-text: #ffffff;
-  --accent-soft: #eceafe;
-  --live: #15803d;
-  --live-soft: #dcfce7;
-  --cached: #1d4ed8;
-  --cached-soft: #dbeafe;
-  --fallback: #b45309;
-  --fallback-soft: #fef3c7;
-  --failed: #b91c1c;
-  --failed-soft: #fee2e2;
-  --fast: #16a34a;
-  --average: #d97706;
-  --slow: #dc2626;
-  --radius: 12px;
-  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 8%);
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1117;
-    --surface: #181b24;
-    --surface-2: #21252f;
-    --border: #2c313d;
-    --text: #e7e9ee;
-    --muted: #9aa2b4;
-    --accent: #8b85ff;
-    --accent-text: #0f1117;
-    --accent-soft: #2a2850;
-    --live: #4ade80;
-    --live-soft: #14301f;
-    --cached: #7aa7ff;
-    --cached-soft: #172645;
-    --fallback: #fbbf24;
-    --fallback-soft: #3a2c0b;
-    --failed: #f87171;
-    --failed-soft: #3d1616;
-    --shadow: none;
-  }
-}
+/*
+  Components and layout. Colours, shadows and fonts come only from the semantic tokens (--bg, --text, --accent...)
+  defined by the theme files, never from raw values, so a new theme needs no change here.
+  The three layouts (wide, medium, narrow) are chosen by js/display.js, which sets data-layout on the <html> element.
+*/
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -113,6 +68,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .ghost:hover:not(:disabled) { background: var(--surface-2); }
 .small { font-size: 0.85rem; padding: 4px 10px; }
 .link-button { background: none; border: 0; color: var(--accent); padding: 0; }
+
+/* Theme picker in the header. */
+.theme-picker { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.theme-picker select { width: auto; padding: 5px 8px; }
+
+/* The colours fade for a moment when the theme changes. display.js skips this when the device asks for less motion. */
+.theme-changing,
+.theme-changing * { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease !important; }
 
 input, select {
   font: inherit; color: var(--text); background: var(--surface);
@@ -232,11 +195,33 @@ dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 /* Space below the last card. */
 main.container { padding-bottom: 32px; }
 
-@media (max-width: 600px) {
-  /* On a phone the header wraps to several lines, so it scrolls away instead of covering the results. */
-  .site-header { position: static; }
-  .filter-grid fieldset { grid-column: 1 / -1; }
-  .results { grid-template-columns: 1fr; }
-  .item { grid-template-columns: 72px 1fr; }
-  .item-media { width: 72px; }
-}
+/* ---------------------------------------------------------------- Layouts
+   Wide (above 640 px) is the base above. Medium (481 to 640 px) and narrow (up to 480 px) adjust it.
+   js/display.js sets data-layout on <html> from the window's width. */
+
+/* Medium and narrow: the header wraps to several lines, so it scrolls away instead of covering the results. */
+[data-layout="medium"] .site-header,
+[data-layout="narrow"] .site-header { position: static; }
+
+/* Medium and narrow: the choice groups take the full width, and results show one per row. */
+[data-layout="medium"] .filter-grid fieldset,
+[data-layout="narrow"] .filter-grid fieldset { grid-column: 1 / -1; }
+[data-layout="medium"] .results,
+[data-layout="narrow"] .results { grid-template-columns: minmax(0, 1fr); }
+
+/* Medium: two fields and two source cards per row. */
+[data-layout="medium"] .filter-grid,
+[data-layout="medium"] .source-status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Narrow: one column everywhere, tighter edges, smaller images, and wide buttons that are easy to tap. */
+[data-layout="narrow"] .container { padding: 0 12px; }
+[data-layout="narrow"] .search-card { padding: 12px; }
+[data-layout="narrow"] .header-actions { width: 100%; }
+[data-layout="narrow"] .tabs { flex: 1 1 auto; }
+[data-layout="narrow"] .tabs button { flex: 1; }
+[data-layout="narrow"] .filter-grid,
+[data-layout="narrow"] .source-status { grid-template-columns: minmax(0, 1fr); }
+[data-layout="narrow"] .item { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; padding: 12px; }
+[data-layout="narrow"] .item-media { width: 72px; }
+[data-layout="narrow"] .results-header { flex-direction: column; align-items: stretch; }
+[data-layout="narrow"] .pager { justify-content: space-between; }
