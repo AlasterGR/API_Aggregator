@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GameDataAggregator.Api/GameDataAggregator.Api.csproj" />
+    <Project Path="src/GameDataAggregator.Core/GameDataAggregator.Core.csproj" />
+    <Project Path="src/GameDataAggregator.Infrastructure/GameDataAggregator.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GameDataAggregator.IntegrationTests/GameDataAggregator.IntegrationTests.csproj" />
+    <Project Path="tests/GameDataAggregator.UnitTests/GameDataAggregator.UnitTests.csproj" />
+  </Folder>
+</Solution>

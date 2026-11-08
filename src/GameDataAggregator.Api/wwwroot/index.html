@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game Data Aggregator</title>
+  <meta name="description" content="Search game information, deals and player activity from several APIs at once.">
+  <!-- Browser tab icon: empty for now. To add one, put an image in wwwroot (e.g. img/favicon.svg) and set href="img/favicon.svg".
+       "data:," is an empty icon. It also stops the browser from asking the server for a missing /favicon.ico. -->
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/site.css">
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <!-- Logo: empty for now and then hidden by the CSS. To add one, put an image inside, e.g.
+             <img src="img/logo.svg" alt=""> -->
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <h1>Game Data Aggregator</h1>
+          <p class="tagline">One search, several game APIs, queried in parallel.</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <nav class="tabs" role="tablist" aria-label="Sections">
+          <button type="button" role="tab" id="tab-search" aria-controls="panel-search" aria-selected="true">Search</button>
+          <button type="button" role="tab" id="tab-statistics" aria-controls="panel-statistics" aria-selected="false" tabindex="-1">Statistics</button>
+        </nav>
+        <!-- A link to another page, not a tab, so it sits outside the tab list and opens in a new browser tab.
+             It stays hidden unless the API reference exists (Development only), see app.js. -->
+        <a class="ghost button-link" id="api-reference-link" href="scalar" target="_blank" rel="noopener" hidden>API reference ↗</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Search -->
+    <section id="panel-search" role="tabpanel" aria-labelledby="tab-search">
+      <form id="search-form" class="card search-card" novalidate>
+        <div class="search-row">
+          <label class="visually-hidden" for="search">Game name</label>
+          <input id="search" name="search" type="search" placeholder="Search a game, e.g. witcher" minlength="2" maxlength="100" required autocomplete="off">
+          <button type="submit" class="primary" id="search-button">Search</button>
+        </div>
+
+        <details class="filters" id="filters" open>
+          <summary>Filters and sorting</summary>
+          <div class="filter-grid">
+            <fieldset>
+              <legend>Sources</legend>
+              <div class="pill-group" id="sources-group"><span class="muted">Loading…</span></div>
+            </fieldset>
+            <fieldset>
+              <legend>Categories</legend>
+              <div class="pill-group" id="categories-group"></div>
+            </fieldset>
+            <label>Tag
+              <input name="tag" type="text" maxlength="50" placeholder="e.g. RPG, Steam, On Sale">
+            </label>
+            <label>From
+              <input name="from" type="date">
+            </label>
+            <label>To
+              <input name="to" type="date">
+            </label>
+            <label>Sort by
+              <select name="sortBy">
+                <option>Relevance</option>
+                <option>Date</option>
+                <option>Title</option>
+                <option>Source</option>
+              </select>
+            </label>
+            <label>Direction
+              <select name="sortDirection">
+                <option>Descending</option>
+                <option>Ascending</option>
+              </select>
+            </label>
+            <label>Per page
+              <select name="pageSize">
+                <option>10</option>
+                <option selected>20</option>
+                <option>50</option>
+                <option>100</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-actions">
+            <button type="button" class="link-button" id="reset-filters">Reset filters</button>
+          </div>
+        </details>
+      </form>
+
+      <div id="request-bar" class="request-bar" hidden>
+        <code id="request-url"></code>
+        <span id="request-meta" class="muted"></span>
+        <button type="button" class="ghost small" id="copy-url" title="Copy the request URL, e.g. to paste into Postman">Copy URL</button>
+      </div>
+
+      <div id="search-error" class="alert" role="alert" hidden></div>
+
+      <div id="source-status" class="source-status" aria-live="polite"></div>
+
+      <div id="results-header" class="results-header" hidden>
+        <h2 id="results-summary"></h2>
+        <div class="pager">
+          <button type="button" class="ghost small" id="prev-page">Previous</button>
+          <span id="page-info" class="muted"></span>
+          <button type="button" class="ghost small" id="next-page">Next</button>
+        </div>
+      </div>
+
+      <div id="results" class="results"></div>
+
+      <div id="empty-state" class="empty-state">
+        <p>Type a game name and press <strong>Search</strong>.</p>
+        <p class="muted">You will see the game's details, its current deals and how many people are playing it, all in one place.</p>
+      </div>
+
+      <details id="raw-json" class="raw-json" hidden>
+        <summary>Raw JSON response</summary>
+        <pre id="raw-json-content"></pre>
+      </details>
+    </section>
+
+    <!-- Statistics -->
+    <section id="panel-statistics" role="tabpanel" aria-labelledby="tab-statistics" hidden>
+      <div class="card">
+        <div class="stats-toolbar">
+          <div>
+            <h2>Request statistics</h2>
+            <p class="muted" id="stats-generated">Counts every HTTP request sent to each external API since start-up, retries included. Cache hits are not counted.</p>
+          </div>
+          <div class="stats-actions">
+            <label class="toggle"><input type="checkbox" id="auto-refresh"> Auto-refresh (5 s)</label>
+            <button type="button" class="ghost small" id="refresh-stats">Refresh</button>
+          </div>
+        </div>
+        <div id="stats-error" class="alert" role="alert" hidden></div>
+        <div class="table-wrap">
+          <table class="stats-table">
+            <thead>
+              <tr>
+                <th scope="col">API</th>
+                <th scope="col" class="num">Requests</th>
+                <th scope="col" class="num">Failed</th>
+                <th scope="col" class="num">Avg response</th>
+                <th scope="col">Fast <span class="muted">(&lt; 100 ms)</span></th>
+                <th scope="col">Average <span class="muted">(100-200 ms)</span></th>
+                <th scope="col">Slow <span class="muted">(&gt; 200 ms)</span></th>
+                <th scope="col">Distribution</th>
+              </tr>
+            </thead>
+            <tbody id="stats-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <template id="item-template">
+    <article class="item card">
+      <div class="item-media"></div>
+      <div class="item-body">
+        <div class="item-badges"></div>
+        <h3 class="item-title"></h3>
+        <p class="item-meta muted"></p>
+        <div class="relevance" title="Relevance to the search text">
+          <span class="relevance-bar"><span></span></span>
+          <span class="relevance-value muted"></span>
+        </div>
+        <ul class="tags"></ul>
+        <dl class="metrics"></dl>
+        <details class="attributes">
+          <summary>Details</summary>
+          <dl></dl>
+        </details>
+      </div>
+    </article>
+  </template>
+</body>
+</html>

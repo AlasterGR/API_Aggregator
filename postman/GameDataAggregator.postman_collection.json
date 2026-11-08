@@ -1,0 +1,628 @@
+{
+  "info": {
+    "_postman_id": "bc9471ae-c01f-4c4f-94b4-fc53fcd8d8d2",
+    "name": "Game Data Aggregator",
+    "description": "Requests for the Game Data Aggregator REST API.\n\nStart the API (`dotnet run --project src/GameDataAggregator.Api`), then run the requests one by one or with the Collection Runner. `baseUrl` defaults to the HTTP profile (http://localhost:5067). To use HTTPS (https://localhost:7252), trust the ASP.NET Core development certificate (`dotnet dev-certs https --trust`) or turn off SSL certificate verification in Postman's settings.\n\nAuthentication: the search and statistics endpoints need a JWT access token. While the API runs in Development, the collection's pre-request script gets one from `POST /api/v1/auth/token` and stores it in `accessToken`, so every request works without setup. Outside Development that endpoint does not exist: paste a token from your identity provider into the `accessToken` variable instead.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5067",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessTokenExpiresAt",
+      "value": "0",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Get development token",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Issues a short-lived JWT access token. Exists only while the API runs in Development, and answers 404 elsewhere. The test script stores the token in the `accessToken` collection variable."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Returns a bearer token\", () => {",
+                  "    pm.expect(body.tokenType).to.eql(\"Bearer\");",
+                  "    pm.expect(body.accessToken).to.be.a(\"string\").that.is.not.empty;",
+                  "    pm.expect(body.expiresIn).to.be.above(0);",
+                  "});",
+                  "pm.collectionVariables.set(\"accessToken\", body.accessToken);",
+                  "pm.collectionVariables.set(\"accessTokenExpiresAt\", String(Date.now() + body.expiresIn * 1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search without a token (401)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aggregation?search=witcher",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aggregation"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "witcher"
+                }
+              ]
+            },
+            "description": "Shows that the search endpoint refuses requests without an access token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Asks for a bearer token\", () => pm.expect(pm.response.headers.get(\"WWW-Authenticate\")).to.include(\"Bearer\"));",
+                  "pm.test(\"Body is problem details\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Aggregation",
+      "item": [
+        {
+          "name": "Search all sources",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aggregation?search=witcher",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aggregation"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "witcher"
+                }
+              ]
+            },
+            "description": "Queries every enabled source in parallel and returns one combined list. Each entry in `sources` says whether that source's data is Live, Cached, Fallback or Failed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response is JSON\", () => pm.response.to.be.json);",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Has items and a status per source\", () => {",
+                  "    pm.expect(body.items).to.be.an(\"array\");",
+                  "    pm.expect(body.sources).to.be.an(\"array\").that.is.not.empty;",
+                  "    body.sources.forEach(s => pm.expect([\"Live\", \"Cached\", \"Fallback\", \"Failed\", \"NotConfigured\"]).to.include(s.status));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sources that need no key",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aggregation?search=witcher&sources=CheapShark,Steam,Speedrun",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aggregation"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "witcher"
+                },
+                {
+                  "key": "sources",
+                  "value": "CheapShark,Steam,Speedrun"
+                }
+              ]
+            },
+            "description": "CheapShark, Steam and speedrun.com need no API key, so this request returns live data on a fresh clone."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Exactly the three requested sources\", () => {",
+                  "    pm.expect(body.sources.map(s => s.source)).to.eql([\"CheapShark\", \"Steam\", \"Speedrun\"]);",
+                  "});",
+                  "pm.test(\"None of them needs configuration\", () => {",
+                  "    body.sources.forEach(s => pm.expect(s.status).to.not.eql(\"NotConfigured\"));",
+                  "});",
+                  "pm.test(\"Items come only from those sources\", () => {",
+                  "    body.items.forEach(i => pm.expect([\"CheapShark\", \"Steam\", \"Speedrun\"]).to.include(i.source));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search with every parameter",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aggregation?search=elden ring&sources=Steam,CheapShark,IGDB&categories=Deal,PlayerActivity,GameInfo&sortBy=Date&sortDirection=Descending&page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aggregation"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "elden ring"
+                },
+                {
+                  "key": "sources",
+                  "value": "Steam,CheapShark,IGDB"
+                },
+                {
+                  "key": "categories",
+                  "value": "Deal,PlayerActivity,GameInfo"
+                },
+                {
+                  "key": "tag",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2022-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sortBy",
+                  "value": "Date"
+                },
+                {
+                  "key": "sortDirection",
+                  "value": "Descending"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Every query parameter. Disabled parameters are optional: tick them in the Params tab to use them."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response is JSON\", () => pm.response.to.be.json);",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Has items and a status per source\", () => {",
+                  "    pm.expect(body.items).to.be.an(\"array\");",
+                  "    pm.expect(body.sources).to.be.an(\"array\").that.is.not.empty;",
+                  "    body.sources.forEach(s => pm.expect([\"Live\", \"Cached\", \"Fallback\", \"Failed\", \"NotConfigured\"]).to.include(s.status));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deals only, sorted by title",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aggregation?search=cyberpunk&categories=Deal&sortBy=Title&sortDirection=Ascending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aggregation"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "cyberpunk"
+                },
+                {
+                  "key": "categories",
+                  "value": "Deal"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "Title"
+                },
+                {
+                  "key": "sortDirection",
+                  "value": "Ascending"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response is JSON\", () => pm.response.to.be.json);",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Has items and a status per source\", () => {",
+                  "    pm.expect(body.items).to.be.an(\"array\");",
+                  "    pm.expect(body.sources).to.be.an(\"array\").that.is.not.empty;",
+                  "    body.sources.forEach(s => pm.expect([\"Live\", \"Cached\", \"Fallback\", \"Failed\", \"NotConfigured\"]).to.include(s.status));",
+                  "});",
+                  "pm.test(\"Only deals\", () => body.items.forEach(i => pm.expect(i.category).to.eql(\"Deal\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by tag (genre or store)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aggregation?search=witcher&tag=On Sale",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aggregation"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "witcher"
+                },
+                {
+                  "key": "tag",
+                  "value": "On Sale"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response is JSON\", () => pm.response.to.be.json);",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Has items and a status per source\", () => {",
+                  "    pm.expect(body.items).to.be.an(\"array\");",
+                  "    pm.expect(body.sources).to.be.an(\"array\").that.is.not.empty;",
+                  "    body.sources.forEach(s => pm.expect([\"Live\", \"Cached\", \"Fallback\", \"Failed\", \"NotConfigured\"]).to.include(s.status));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid parameters (400 problem details)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aggregation?search=x&pageSize=500&sources=Twitter",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aggregation"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "x"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "500"
+                },
+                {
+                  "key": "sources",
+                  "value": "Twitter"
+                }
+              ]
+            },
+            "description": "Shows the RFC 9457 validation error format."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Problem details content type\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"Lists the invalid parameters\", () => pm.expect(pm.response.json().errors).to.be.an(\"object\").that.is.not.empty);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sources",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/sources",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "sources"
+          ]
+        },
+        "description": "Valid values for the `sources` parameter. Open to everyone, so no token is sent."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Response is JSON\", () => pm.response.to.be.json);",
+              "pm.test(\"Lists source names\", () => pm.expect(pm.response.json()).to.be.an(\"array\").that.is.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Statistics",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/statistics",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "statistics"
+          ]
+        },
+        "description": "Per external API: total requests, failures and average response time, overall and per bucket (fast < 100 ms, average 100-200 ms, slow > 200 ms). Needs an access token."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Response is JSON\", () => pm.response.to.be.json);",
+              "pm.test(\"Three performance buckets per API\", () => pm.response.json().apis.forEach(a => pm.expect(a.buckets.map(b => b.bucket)).to.eql([\"Fast\", \"Average\", \"Slow\"])));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "Open to everyone, so no token is sent."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Healthy\", () => pm.expect(pm.response.text()).to.eql(\"Healthy\"));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Get a development token when there is none or it expires within a minute. The token request itself is skipped.",
+          "const isTokenRequest = pm.request.url.getPath().endsWith('/auth/token');",
+          "const expiresAt = Number(pm.collectionVariables.get('accessTokenExpiresAt') || 0);",
+          "const hasFreshToken = pm.collectionVariables.get('accessToken') && expiresAt - Date.now() > 60000;",
+          "if (!isTokenRequest && !hasFreshToken) {",
+          "    pm.sendRequest({ url: pm.collectionVariables.get('baseUrl') + '/api/v1/auth/token', method: 'POST' }, (error, response) => {",
+          "        // Outside Development the endpoint answers 404, so keep whatever token was pasted in.",
+          "        if (error || response.code !== 200) return;",
+          "        const body = response.json();",
+          "        pm.collectionVariables.set('accessToken', body.accessToken);",
+          "        pm.collectionVariables.set('accessTokenExpiresAt', String(Date.now() + body.expiresIn * 1000));",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ]
+}
