@@ -20,6 +20,9 @@ public sealed class SpeedrunProvider(HttpClient httpClient, IOptions<SpeedrunOpt
 
     public string Name => SourceName;
 
+    /// <summary>The only category of item this source gives.</summary>
+    public IReadOnlySet<ItemCategory> Categories { get; } = new HashSet<ItemCategory> { ItemCategory.PlayerActivity };
+
     /// <summary>Searches speedrun.com for the game and returns its community details.</summary>
     public async Task<IReadOnlyList<AggregatedItem>> FetchAsync(string search, CancellationToken cancellationToken)
     {

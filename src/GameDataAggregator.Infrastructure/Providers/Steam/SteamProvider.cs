@@ -27,6 +27,9 @@ public sealed partial class SteamProvider(
 
     public string Name => SourceName;
 
+    /// <summary>The only category of item this source gives.</summary>
+    public IReadOnlySet<ItemCategory> Categories { get; } = new HashSet<ItemCategory> { ItemCategory.PlayerActivity };
+
     /// <summary>Finds games in the Steam store and adds how many people are playing each one now.</summary>
     public async Task<IReadOnlyList<AggregatedItem>> FetchAsync(string search, CancellationToken cancellationToken)
     {

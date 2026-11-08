@@ -123,6 +123,8 @@ input, select {
 .search-card { padding: 16px; }
 .search-row { display: flex; gap: 8px; }
 .search-row input { font-size: 1.05rem; padding: 11px 14px; border-radius: 10px; }
+/* What is missing before a search can run, right under the search box where the user looks. */
+.search-blocked { margin: 8px 0 0; color: var(--fallback); font-size: 0.9rem; font-weight: 600; }
 .filters { margin-top: 12px; }
 .filters > summary { cursor: pointer; color: var(--muted); font-weight: 600; font-size: 0.9rem; }
 .filter-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); margin-top: 12px; }
@@ -130,6 +132,8 @@ input, select {
 .filter-grid fieldset { grid-column: span 2; border: 0; margin: 0; padding: 0; min-width: 0; }
 .filter-grid legend { font-size: 0.85rem; font-weight: 600; color: var(--muted); padding: 0; margin-bottom: 4px; }
 .filter-actions { margin-top: 10px; text-align: right; font-size: 0.85rem; }
+/* Why some choices are unavailable, shown right under the choices. */
+.choice-hint { margin: 12px 0 0; padding: 0 0 0 18px; color: var(--muted); font-size: 0.85rem; }
 
 .pill-group { display: flex; flex-wrap: wrap; gap: 6px; }
 .pill { position: relative; }
@@ -140,6 +144,9 @@ input, select {
 }
 .pill input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .pill input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* An unavailable choice looks like the other disabled buttons, with a dashed border so it does not read as unticked. */
+.pill input:disabled { cursor: not-allowed; }
+.pill input:disabled + span { opacity: 0.55; border-style: dashed; }
 
 /* Request bar */
 .request-bar {

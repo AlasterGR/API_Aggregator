@@ -24,8 +24,8 @@ const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 const dateTimeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
 
-//  What the page is currently showing.
-const state = { page: 1, lastResult: null, statsTimer: null, token: null };
+//  What the page is currently showing, and each source with the categories it gives.
+const state = { page: 1, lastResult: null, statsTimer: null, token: null, sources: [], searching: false };
 
 /** Creates an element; string children become text nodes, so values are never parsed as HTML. */
 function el(tag, props = {}, ...children) {
@@ -127,17 +127,199 @@ function selectTab(name) {
 
 // ---------------------------------------------------------------- Search form
 
-/** Fills the source choices from the API. */
+/** Fills the source choices from the API, and remembers which categories each source gives. */
 async function loadSources() {
   //  Show one choice per source, or a note if the list cannot be loaded.
   const group = $('#sources-group');
   try {
     const { response, body } = await fetchJson(API.sources);
     if (!response.ok || !Array.isArray(body)) throw new Error(`HTTP ${response.status}`);
-    group.replaceChildren(...body.map((name) => pill('sources', name, name)));
+    state.sources = body;
+    group.replaceChildren(...body.map((source) => pill('sources', source.name, source.name)));
   } catch (error) {
     group.replaceChildren(el('span', { className: 'muted' }, `Could not load sources (${error.message}).`));
   }
+}
+
+/** Joins names into readable text: "A", "A and B", "A, B and C". */
+function joinNames(names) {
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+/** Returns the boxes of one choice group, "sources" or "categories". */
+function boxesOf(group) {
+  return [...$('#search-form').querySelectorAll(`input[name="${group}"]`)];
+}
+
+/**
+ * Returns what the user wants from a group: the choices they ticked plus the ticks parked on choices that are turned
+ * off for now. Ticks the page added by itself do not count. While the group has none of the user's own live ticks,
+ * every choice counts, so an empty group never limits the other one while the user is still choosing.
+ */
+function wantedValues(group) {
+  //  Count every choice while the user has no live tick of their own in the group.
+  const boxes = boxesOf(group);
+  const ownLiveTicks = boxes.filter((b) => b.checked && b.dataset.auto !== 'true');
+  if (!ownLiveTicks.length) return boxes.map((b) => b.value);
+
+  //  Otherwise use the user's live ticks and their parked ticks.
+  return boxes.filter((b) => ownLiveTicks.includes(b) || b.dataset.wasChecked === 'true').map((b) => b.value);
+}
+
+/** Removes the ticks the page added by itself, so they can be worked out again. */
+function clearAutomaticTicks(group) {
+  for (const box of boxesOf(group).filter((b) => b.dataset.auto === 'true')) {
+    box.checked = false;
+    delete box.dataset.auto;
+  }
+}
+
+/** Makes every tick in a group the user's own, for example after they click one of its choices. */
+function keepTicksAsChosen(group) {
+  for (const box of boxesOf(group)) delete box.dataset.auto;
+}
+
+/**
+ * Ticks a group's only available choice when nothing in the group is ticked. With one possible answer, asking the
+ * user to click it adds nothing. The tick is marked as the page's own, so it does not limit the other group.
+ */
+function tickOnlyChoiceIfEmpty(group) {
+  //  Act only on an empty group with exactly one available choice.
+  const boxes = boxesOf(group);
+  const available = boxes.filter((b) => !b.disabled);
+  if (boxes.some((b) => b.checked) || available.length !== 1) return;
+
+  //  Tick it, and mark the tick as automatic.
+  available[0].checked = true;
+  available[0].dataset.auto = 'true';
+}
+
+/** Returns the groups that have no ticked choice, so a search cannot run yet. */
+function emptyGroups() {
+  return ['sources', 'categories'].filter((group) => {
+    const boxes = boxesOf(group);
+    return boxes.length > 0 && !boxes.some((b) => b.checked);
+  });
+}
+
+/**
+ * Turns the Search button off while a group is empty, and says, right under the search box, what is missing.
+ * The message sits there because the button is where the user looks, and the filters may be folded away.
+ */
+function updateSearchAvailability() {
+  //  Name the empty groups in one sentence.
+  const empty = emptyGroups();
+  const names = empty.map((group) => (group === 'sources' ? 'one source' : 'one category'));
+  const message = $('#search-blocked');
+  message.textContent = empty.length ? `Choose at least ${joinNames(names)} to search.` : '';
+  message.hidden = empty.length === 0;
+
+  //  Allow a search only when every group has a tick and no search is running.
+  $('#search-button').disabled = empty.length > 0 || state.searching;
+}
+
+/**
+ * Turns a choice on or off. A choice that is turned off is unticked, and remembers whether it was ticked,
+ * so it comes back as the user left it once it can match again. Returns true when a tick was parked.
+ */
+function setAvailable(box, available) {
+  //  Turn the choice off, parking the user's tick for later.
+  if (!available && !box.disabled) {
+    const wasChecked = box.checked;
+    box.dataset.wasChecked = String(wasChecked);
+    box.checked = false;
+    box.disabled = true;
+    return wasChecked;
+  }
+
+  //  Turn the choice back on, with the tick it had before.
+  if (available && box.disabled) {
+    box.disabled = false;
+    box.checked = box.dataset.wasChecked === 'true';
+    delete box.dataset.wasChecked;
+  }
+  return false;
+}
+
+/**
+ * Turns each choice of a group on or off with the given rule. When that parks the group's last tick, the remaining
+ * choices are ticked: no tick already means "all", so the search is the same, but the page now shows what it uses.
+ */
+function applyAvailability(group, isAvailable) {
+  //  Turn each choice on or off, noting whether a tick was parked.
+  const boxes = boxesOf(group);
+  let parkedATick = false;
+  for (const box of boxes) parkedATick = setAvailable(box, isAvailable(box.value)) || parkedATick;
+
+  //  Show the remaining choices as ticked when the last tick was just parked.
+  if (parkedATick && !boxes.some((b) => b.checked)) {
+    for (const box of boxes.filter((b) => !b.disabled)) box.checked = true;
+  }
+}
+
+/** Turns off each category that none of the wanted sources gives. */
+function updateCategoryChoices() {
+  const sources = state.sources.filter((s) => wantedValues('sources').includes(s.name));
+  applyAvailability('categories', (category) => sources.some((s) => s.categories.includes(category)));
+}
+
+/** Turns off each source that gives none of the wanted categories. */
+function updateSourceChoices() {
+  const categories = wantedValues('categories');
+  applyAvailability('sources', (name) => {
+    const source = state.sources.find((s) => s.name === name);
+    return !source || source.categories.some((c) => categories.includes(c));
+  });
+}
+
+/**
+ * Turns off the choices that cannot match the other group's choices, so the user never builds a search that is sure
+ * to find nothing. The group the user just changed is kept as it is, and the other group adapts to it.
+ */
+function updateChoiceAvailability(changedGroup = 'sources') {
+  //  Skip the check when the sources could not be loaded, but still check whether a search can run.
+  if (!state.sources.length) {
+    updateSearchAvailability();
+    return;
+  }
+
+  //  Treat the user's ticks in the changed group as their own, and work out the other group's automatic ticks again.
+  const otherGroup = changedGroup === 'categories' ? 'sources' : 'categories';
+  keepTicksAsChosen(changedGroup);
+  clearAutomaticTicks(otherGroup);
+
+  //  Adapt the other group first, then check the changed one, twice so both settle.
+  const steps = changedGroup === 'categories'
+    ? [updateSourceChoices, updateCategoryChoices]
+    : [updateCategoryChoices, updateSourceChoices];
+  for (let pass = 0; pass < 2; pass++) steps.forEach((step) => step());
+
+  //  Tick the other group's only possible choice, then show the reasons and whether a search can run.
+  tickOnlyChoiceIfEmpty(otherGroup);
+  renderChoiceHint();
+  updateSearchAvailability();
+}
+
+/** Explains, under the filters, why each turned-off choice is unavailable. */
+function renderChoiceHint() {
+  //  Write one short reason per unavailable category.
+  const reasons = boxesOf('categories').filter((b) => b.disabled).map((box) => {
+    const givers = state.sources.filter((s) => s.categories.includes(box.value)).map((s) => s.name);
+    return givers.length
+      ? `${CATEGORY_LABELS[box.value]} is unavailable: only ${joinNames(givers)} ${givers.length === 1 ? 'gives' : 'give'} it.`
+      : `${CATEGORY_LABELS[box.value]} is unavailable: no source gives it.`;
+  });
+
+  //  Write one short reason per unavailable source.
+  for (const box of boxesOf('sources').filter((b) => b.disabled)) {
+    const source = state.sources.find((s) => s.name === box.value);
+    reasons.push(`${source.name} is unavailable: it gives only ${joinNames(source.categories.map((c) => CATEGORY_LABELS[c] ?? c))}.`);
+  }
+
+  //  Show the reasons, or hide the box when every choice is available.
+  const hint = $('#choice-hint');
+  hint.replaceChildren(...reasons.map((reason) => el('li', {}, reason)));
+  hint.hidden = reasons.length === 0;
 }
 
 /** Creates a ticked checkbox choice. */
@@ -162,9 +344,10 @@ function buildQuery(page) {
   //  Always send the search text.
   params.set('search', (data.get('search') ?? '').toString().trim());
 
-  //  Find which boxes in a group are ticked, and whether all of them are.
+  //  Find which available boxes in a group are ticked, and whether all of them are. Unavailable choices never
+  //  match, so leaving them out of the request changes nothing.
   const allChecked = (name) => {
-    const boxes = [...form.querySelectorAll(`input[name="${name}"]`)];
+    const boxes = boxesOf(name).filter((b) => !b.disabled);
     const checked = boxes.filter((b) => b.checked).map((b) => b.value);
     return { checked, all: checked.length === boxes.length };
   };
@@ -218,14 +401,16 @@ function restoreFromLocation() {
     }
   }
 
-  //  Tick only the sources and categories named in the address.
+  //  Tick only the sources and categories named in the address. An empty or unknown list means all, as in the API.
   for (const name of ['sources', 'categories']) {
-    if (!params.has(name)) continue;
-    const wanted = params.get(name).toLowerCase().split(',');
-    for (const box of form.querySelectorAll(`input[name="${name}"]`)) {
-      box.checked = wanted.includes(box.value.toLowerCase());
-    }
+    const wanted = (params.get(name) ?? '').toLowerCase().split(',').map((v) => v.trim()).filter(Boolean);
+    const boxes = boxesOf(name);
+    if (!boxes.some((box) => wanted.includes(box.value.toLowerCase()))) continue;
+    for (const box of boxes) box.checked = wanted.includes(box.value.toLowerCase());
   }
+
+  //  Turn off the categories the chosen sources cannot give, for example in an old or hand-made link.
+  updateChoiceAvailability('sources');
 
   //  Remember the page to open.
   state.page = Number(params.get('page')) || 1;
@@ -234,9 +419,16 @@ function restoreFromLocation() {
 
 /** Puts every filter back to its default. */
 function resetFilters() {
-  //  Tick every box and clear or reset every other field.
+  //  Make every choice available and ticked, and clear or reset every other field.
   const form = $('#search-form');
-  for (const box of form.querySelectorAll('input[type="checkbox"]')) box.checked = true;
+  for (const box of form.querySelectorAll('.pill input[type="checkbox"]')) {
+    box.disabled = false;
+    box.checked = true;
+    delete box.dataset.wasChecked;
+    delete box.dataset.auto;
+  }
+  renderChoiceHint();
+  updateSearchAvailability();
   form.elements.tag.value = '';
   form.elements.from.value = '';
   form.elements.to.value = '';
@@ -258,6 +450,12 @@ async function search(page = 1) {
     return;
   }
 
+  //  Do not search while a group of choices is empty. The message under the search box already says what is missing.
+  if (emptyGroups().length) {
+    updateSearchAvailability();
+    return;
+  }
+
   //  Build the request and put it in the page address, so it can be shared.
   state.page = page;
   const params = buildQuery(page);
@@ -266,6 +464,7 @@ async function search(page = 1) {
 
   //  Show that the search is running.
   const button = $('#search-button');
+  state.searching = true;
   button.disabled = true;
   button.textContent = 'Searching…';
   hide('#search-error');
@@ -289,8 +488,10 @@ async function search(page = 1) {
     showSearchError(`The request failed: ${error.message}`);
     renderResult(null);
   } finally {
-    button.disabled = false;
+    //  Allow the next search, unless the choices changed meanwhile and a group is now empty.
+    state.searching = false;
     button.textContent = 'Search';
+    updateSearchAvailability();
   }
 }
 
@@ -358,16 +559,28 @@ function renderResult(result) {
   $('#next-page').disabled = result.page >= pages;
   $('#raw-json-content').textContent = JSON.stringify(result, null, 2);
 
-  //  Say so when nothing matched.
+  //  When nothing matched, say whether the sources found nothing or the filters removed what they found.
   if (result.items.length === 0) {
-    $('#results').append(el('p', { className: 'muted' }, 'No items match the search and filters.'));
+    const found = result.sources.reduce((sum, s) => sum + s.itemCount, 0);
+    const message = found > 0 && result.totalCount === 0
+      ? `The sources found ${found} item${found === 1 ? '' : 's'}, but none matches your filters. Try another tag or wider dates.`
+      : result.totalCount > 0
+        ? 'This page is past the last result.'
+        : `No source found anything for “${result.search}”.`;
+    $('#results').append(el('p', { className: 'muted' }, message));
   }
 }
 
 /** Builds the card showing how one source did. */
 function renderSource(source) {
-  //  Note the item count and time, and the age of the data when it is not live.
-  const facts = [`${source.itemCount} item${source.itemCount === 1 ? '' : 's'}`, formatMs(source.durationMs)];
+  //  Note how many items the source found and how many pass the filters, unless it gave none at all.
+  const facts = [];
+  if (source.status !== 'Failed' && source.status !== 'NotConfigured') {
+    facts.push(`${source.itemCount} found · ${source.matchCount} match`);
+  }
+
+  //  Note the time taken, and the age of the data when it is not live.
+  facts.push(formatMs(source.durationMs));
   if (source.fetchedAt && source.status !== 'Live') {
     facts.push(`data from ${dateTimeFormat.format(new Date(source.fetchedAt))}`);
   }
@@ -548,6 +761,11 @@ async function init() {
   //  Fill in the choices.
   renderCategories();
   await loadSources();
+
+  //  Turn off impossible choices each time a source or category is ticked or unticked, and check that a search can run.
+  $('#sources-group').addEventListener('change', () => updateChoiceAvailability('sources'));
+  $('#categories-group').addEventListener('change', () => updateChoiceAvailability('categories'));
+  updateSearchAvailability();
 
   //  Connect the buttons and fields to their actions.
   $('#search-form').addEventListener('submit', (event) => {

@@ -16,6 +16,9 @@ public sealed class RawgProvider(HttpClient httpClient, IOptions<RawgOptions> op
 
     public string Name => SourceName;
 
+    /// <summary>The only category of item this source gives.</summary>
+    public IReadOnlySet<ItemCategory> Categories { get; } = new HashSet<ItemCategory> { ItemCategory.GameInfo };
+
     public string? ConfigurationError => string.IsNullOrWhiteSpace(options.Value.ApiKey)
         ? $"RAWG API key is not configured. Set '{ProviderRegistration.ConfigurationRoot}:{RawgOptions.SectionName}:ApiKey'."
         : null;

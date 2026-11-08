@@ -12,6 +12,9 @@ internal sealed class FakeGameDataProvider(
 
     public string Name { get; } = name;
 
+    /// <summary>The categories this source gives. All of them unless a test says otherwise.</summary>
+    public IReadOnlySet<ItemCategory> Categories { get; set; } = Enum.GetValues<ItemCategory>().ToHashSet();
+
     public int Calls => Volatile.Read(ref _calls);
 
     /// <summary>Set to simulate a provider that is missing an API key or other required setting.</summary>

@@ -40,6 +40,8 @@ reasoning history stays readable.
 | [DEC-030](#dec-030-a-word-document-for-the-service-and-a-markdown-guide-for-new-sources) | 2026-11-08 | A Word document for the service, and a Markdown guide for new sources |
 | [DEC-031](#dec-031-side-requests-use-their-own-http-client) | 2026-11-08 | Side requests use their own HTTP client |
 | [DEC-032](#dec-032-the-twitch-token-request-gets-one-try-that-fits-inside-the-sources-attempt) | 2026-11-08 | The Twitch token request gets one try that fits inside the source's attempt |
+| [DEC-033](#dec-033-sources-declare-their-categories-and-impossible-choices-are-disabled) | 2026-11-08 | Sources declare their categories, and impossible choices are disabled |
+| [DEC-034](#dec-034-the-page-never-searches-with-an-empty-group-of-choices) | 2026-11-09 | The page never searches with an empty group of choices |
 
 ---
 
@@ -495,3 +497,52 @@ reasoning history stays readable.
   - **only document the rule:** nothing would stop a wrong setting.
 - **Consequences:** `AddTwitchAuthentication` now needs the source's options type, for example
   `handlers => handlers.AddTwitchAuthentication<IgdbOptions>(configuration)`.
+
+## DEC-033: Sources declare their categories, and impossible choices are disabled
+
+- **Context:** each source gives only some categories. Choosing Steam with Game info always gave an empty page,
+  while Steam's card said "10 items" (ISS-038).
+- **Decision:**
+  - `IGameDataProvider` has a required `Categories` member. It is the one place that says which source gives what.
+  - `AggregationService` does not call a source that gives none of the chosen categories, and leaves it out of the
+    answer's `sources` list.
+  - A request that leaves no source gets a `400` that explains what each chosen source gives.
+  - `/api/v1/sources` returns `{ name, categories }` for each source instead of a plain name.
+  - Each `sources` entry in an answer has `matchCount` next to `itemCount`.
+  - The browser UI disables impossible choices with the HTML `disabled` attribute, not only a grey style. A disabled
+    control cannot be clicked or reached with the keyboard, and screen readers announce it as unavailable. A list
+    under the filters says why each choice is unavailable, because browsers do not reliably show tooltips on
+    disabled controls.
+  - Each group adapts to what the user wants in the other group, including ticks parked on disabled choices. So
+    narrowing one group never locks the other.
+  - The design follows Joe Natoli's principles from the backlog: clarity (the reason is written out), visible
+    feedback (the list updates on every click), user control (ticks come back, and nothing locks), consistency
+    (disabled choices look like the other disabled buttons) and accessibility (a real `disabled` attribute and a
+    polite live region).
+- **Alternatives:**
+  - **only explain the empty page:** simpler, but the user still builds searches that cannot work.
+  - **grey out without disabling:** looks unavailable, but still clickable, which is confusing.
+  - **disable in one direction only (categories follow sources):** simpler, but a ticked source could still give
+    nothing.
+- **Consequences:**
+  - `/api/v1/sources` changed shape. The Postman collection, the integration tests and the docs changed with it.
+  - Impossible searches cost no external API call.
+  - A new source must declare its categories, and a new category must be added to the sources that give it.
+
+## DEC-034: The page never searches with an empty group of choices
+
+- **Context:** the page treated an empty group of sources or categories as "all", like the API does. So it could show
+  nothing ticked while it searched everything (ISS-039).
+- **Decision:**
+  - the page needs at least one ticked choice in each group. Otherwise the Search button is disabled, and a message
+    under the search box names the empty group.
+  - when an empty group has exactly one choice that can match, the page ticks it. The tick is marked as the page's
+    own, so it does not limit the other group, and it is worked out again when the other group changes.
+  - the API keeps its rule: a missing `sources` or `categories` means "all".
+- **Alternatives:**
+  - **block unticking the last choice:** simpler, but it stops the common habit of clearing a group and then picking
+    one choice.
+  - **an "All" chip in each group:** also honest, but it adds one more control to each group.
+- **Consequences:** the page always shows what it will search. The Search button can now be disabled for two
+  reasons: a search is running, or a group is empty. `updateSearchAvailability` decides both.
+

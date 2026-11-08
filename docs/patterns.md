@@ -39,8 +39,13 @@ Sections:
 
 ### Layered architecture with inward dependencies
 
-- **What:** Api → Infrastructure → Core. Core depends on nothing project-specific.
-- **Where:** the three `src/` projects. See DEC-003.
+- **What:** every project reference points inwards, towards Core. It is not a chain:
+  - **Core** references no other project.
+  - **Infrastructure** references Core. It implements Core's `IGameDataProvider` (dependency inversion: Core owns
+    the interface, Infrastructure supplies the classes).
+  - **Api** references Core and Infrastructure. Its controllers use Core's services and models. It uses
+    Infrastructure only once, in `Program`, to register it with `AddInfrastructure` (the composition root).
+- **Where:** the `ProjectReference` lines in the three `src/` `.csproj` files. See DEC-003.
 - **Why:** business logic can be tested without HTTP, and swapping an API client cannot break the aggregation rules.
 
 ### Composition root and registration extension methods
@@ -359,6 +364,19 @@ Sections:
   `http(s)` URLs.
 - **Where:** `el()` and `safeUrl()` in [`app.js`](../src/GameDataAggregator.Api/wwwroot/js/app.js).
 - **Why:** data from third-party APIs cannot inject script (XSS).
+
+### Prevent impossible choices, and say why (faceted filtering)
+
+- **What:** a choice that cannot match the rest of the selection is disabled, and a short line says why. Two groups
+  that limit each other adapt to what the user *wants* in the other group, so neither locks the other. A tick on a
+  disabled choice is parked and comes back when the choice can match again. A group is never left empty while a
+  search can run: the Search button waits until each group has a tick, and a group's only possible choice is ticked
+  by the page (DEC-034).
+- **Where:** `updateChoiceAvailability`, `wantedValues` and `renderChoiceHint` in
+  [`app.js`](../src/GameDataAggregator.Api/wwwroot/js/app.js). The server applies the same rule
+  (`SourceInfo.IsSelectedBy`), so a direct API call cannot ask for the impossible either. See DEC-033.
+- **Why:** an empty page with no reason makes the user guess. Preventing the dead end, and explaining it, follows
+  Joe Natoli's principles: clarity, visible feedback and user control.
 
 ### Explicit HTTP caching for static files
 

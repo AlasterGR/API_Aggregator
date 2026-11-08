@@ -38,4 +38,26 @@ public sealed class ProviderConfigurationReporterTests
         Assert.Equal("1 of 2 sources are ready: Ready", summary.Message);
         Assert.Equal(0, missingKey.Calls + ready.Calls);
     }
+
+    /// <summary>Checks that two sources whose names differ only in upper and lower case stop the app at start-up.</summary>
+    [Fact]
+    public async Task Duplicate_source_names_stop_start_up()
+    {
+        //  Register two sources named "Steam" and "steam", and one other source.
+        var services = new ServiceCollection();
+        services.AddSingleton<IGameDataProvider>(FakeGameDataProvider.Returning("Steam"));
+        services.AddSingleton<IGameDataProvider>(FakeGameDataProvider.Returning("steam"));
+        services.AddSingleton<IGameDataProvider>(FakeGameDataProvider.Returning("RAWG"));
+        await using var serviceProvider = services.BuildServiceProvider();
+        var logger = new CapturingLogger<ProviderConfigurationReporter>();
+
+        //  Run the start-up check, and expect it to fail naming the duplicate.
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new ProviderConfigurationReporter(serviceProvider.GetRequiredService<IServiceScopeFactory>(), logger)
+                .StartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("Provider names must be unique. Duplicates: Steam", error.Message);
+
+        //  Expect no report to be logged, since the app does not start.
+        Assert.Empty(logger.Entries);
+    }
 }

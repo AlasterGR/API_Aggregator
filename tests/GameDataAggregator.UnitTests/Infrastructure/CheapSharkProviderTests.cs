@@ -43,6 +43,9 @@ public sealed class CheapSharkProviderTests
         //  Search it.
         var items = await provider.FetchAsync("witcher", Ct);
 
+        //  Expect every item to have a category the source declares.
+        Assert.All(items, item => Assert.Contains(item.Category, provider.Categories));
+
         //  Expect every detail of the first deal to be copied across, and the search to be sent.
         Assert.Equal(2, items.Count);
         var deal = items[0];

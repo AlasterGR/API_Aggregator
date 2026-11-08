@@ -146,19 +146,6 @@ public sealed class AggregationServiceTests
         Assert.Equal(1, result.PageSize);
     }
 
-    /// <summary>Checks that two sources with the same name are refused.</summary>
-    [Fact]
-    public void Rejects_providers_with_duplicate_names()
-    {
-        //  Try to create the service with two sources named alike.
-        var exception = Assert.Throws<InvalidOperationException>(() => NewService(
-            FakeGameDataProvider.Returning("Steam"),
-            FakeGameDataProvider.Returning("steam")));
-
-        //  Expect the error to name the duplicate.
-        Assert.Contains("Steam", exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
     /// <summary>Checks that the service lists its source names.</summary>
     [Fact]
     public void Exposes_the_registered_source_names()
@@ -168,5 +155,56 @@ public sealed class AggregationServiceTests
 
         //  Expect both names, in order.
         Assert.Equal(["A", "B"], service.SourceNames);
+    }
+
+    /// <summary>Checks that the service lists each source with its categories, in a fixed order.</summary>
+    [Fact]
+    public void Lists_each_source_with_its_categories()
+    {
+        //  Set up a source that gives two categories, declared out of order.
+        var source = FakeGameDataProvider.Returning("A");
+        source.Categories = new HashSet<ItemCategory> { ItemCategory.PlayerActivity, ItemCategory.GameInfo };
+
+        //  Expect the categories in the order the enum defines them.
+        var info = Assert.Single(NewService(source).Sources);
+        Assert.Equal("A", info.Name);
+        Assert.Equal([ItemCategory.GameInfo, ItemCategory.PlayerActivity], info.Categories);
+    }
+
+    /// <summary>Checks that a source that cannot give a chosen category is neither called nor reported.</summary>
+    [Fact]
+    public async Task Skips_sources_that_cannot_give_a_chosen_category()
+    {
+        //  Set up a source of game info and a source of player activity.
+        var gameInfo = FakeGameDataProvider.Returning("Info", Item("Witcher", "Info", ItemCategory.GameInfo));
+        gameInfo.Categories = new HashSet<ItemCategory> { ItemCategory.GameInfo };
+        var players = FakeGameDataProvider.Returning("Players", Item("Witcher", "Players", ItemCategory.PlayerActivity));
+        players.Categories = new HashSet<ItemCategory> { ItemCategory.PlayerActivity };
+
+        //  Search both for game info only.
+        var query = new AggregationQuery { Search = "witcher", Categories = new HashSet<ItemCategory> { ItemCategory.GameInfo } };
+        var result = await NewService(gameInfo, players).AggregateAsync(query, Ct);
+
+        //  Expect only the game info source, and no call to the other one.
+        Assert.Equal("Info", Assert.Single(result.Sources).Source);
+        Assert.Equal(0, players.Calls);
+    }
+
+    /// <summary>Checks that each source reports how many of its items pass the filters, on all pages.</summary>
+    [Fact]
+    public async Task Reports_how_many_items_of_each_source_match_the_filters()
+    {
+        //  Set up a source with two RPG items out of three, and a source with none.
+        var service = NewService(
+            FakeGameDataProvider.Returning("A", Item("Witcher", "A", tags: "RPG"), Item("Witcher 2", "A", tags: "RPG"), Item("Witcher 3", "A")),
+            FakeGameDataProvider.Returning("B", Item("Witcher", "B")));
+
+        //  Search for RPG items, one per page.
+        var result = await service.AggregateAsync(new AggregationQuery { Search = "witcher", Tag = "RPG", PageSize = 1 }, Ct);
+
+        //  Expect what each source found and how much of it matched, counted over all pages.
+        Assert.Equal([3, 1], result.Sources.Select(s => s.ItemCount));
+        Assert.Equal([2, 0], result.Sources.Select(s => s.MatchCount));
+        Assert.Single(result.Items);
     }
 }

@@ -502,7 +502,7 @@
             "sources"
           ]
         },
-        "description": "Valid values for the `sources` parameter. Open to everyone, so no token is sent."
+        "description": "Every enabled source with the categories it gives. The names are the valid values of the `sources` parameter. A source is skipped when a search asks only for categories it does not give. Open to everyone, so no token is sent."
       },
       "event": [
         {
@@ -512,7 +512,11 @@
             "exec": [
               "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
               "pm.test(\"Response is JSON\", () => pm.response.to.be.json);",
-              "pm.test(\"Lists source names\", () => pm.expect(pm.response.json()).to.be.an(\"array\").that.is.not.empty);"
+              "pm.test(\"Lists sources\", () => pm.expect(pm.response.json()).to.be.an(\"array\").that.is.not.empty);",
+              "pm.test(\"Each source has a name and its categories\", () => pm.response.json().forEach(s => {",
+              "    pm.expect(s.name).to.be.a(\"string\");",
+              "    pm.expect(s.categories).to.be.an(\"array\").that.is.not.empty;",
+              "}));"
             ]
           }
         }

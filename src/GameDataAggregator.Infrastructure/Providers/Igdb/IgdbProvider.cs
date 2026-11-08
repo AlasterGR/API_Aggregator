@@ -28,6 +28,9 @@ public sealed class IgdbProvider(
 
     public string Name => SourceName;
 
+    /// <summary>The only category of item this source gives.</summary>
+    public IReadOnlySet<ItemCategory> Categories { get; } = new HashSet<ItemCategory> { ItemCategory.GameInfo };
+
     public string? ConfigurationError => authOptions.Value.HasCredentials
         ? null
         : "IGDB needs Twitch application credentials. Set " +

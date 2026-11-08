@@ -42,8 +42,9 @@
         <div class="search-row">
           <label class="visually-hidden" for="search">Game name</label>
           <input id="search" name="search" type="search" placeholder="Search a game, e.g. witcher" minlength="2" maxlength="100" required autocomplete="off">
-          <button type="submit" class="primary" id="search-button">Search</button>
+          <button type="submit" class="primary" id="search-button" aria-describedby="search-blocked">Search</button>
         </div>
+        <p class="search-blocked" id="search-blocked" aria-live="polite" hidden></p>
 
         <details class="filters" id="filters" open>
           <summary>Filters and sorting</summary>
@@ -88,6 +89,7 @@
               </select>
             </label>
           </div>
+          <ul class="choice-hint" id="choice-hint" aria-live="polite" hidden></ul>
           <div class="filter-actions">
             <button type="button" class="link-button" id="reset-filters">Reset filters</button>
           </div>

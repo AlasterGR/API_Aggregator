@@ -50,6 +50,10 @@ them, so each entry records not only the fix but *why* it happened and what to d
 | [ISS-033](#iss-033-side-requests-can-slow-down-or-switch-off-a-sources-main-request) | 2026-11-08 | Resilience | Side requests can slow down or switch off a source's main request | Fixed |
 | [ISS-034](#iss-034-a-base-address-without-a-trailing-slash-loses-part-of-its-path) | 2026-11-08 | Configuration | A base address without a trailing slash loses part of its path | Fixed |
 | [ISS-035](#iss-035-the-igdb-attempt-time-limit-also-limits-the-twitch-token-request) | 2026-11-08 | Resilience | The IGDB attempt time limit also limits the Twitch token request | Fixed |
+| [ISS-036](#iss-036-the-patterns-log-shows-the-project-references-as-a-chain) | 2026-11-08 | Docs | The patterns log shows the project references as a chain | Fixed |
+| [ISS-037](#iss-037-duplicate-source-names-are-found-on-the-first-request-not-at-start-up) | 2026-11-08 | Runtime | Duplicate source names are found on the first request, not at start-up | Fixed |
+| [ISS-038](#iss-038-a-source-and-category-that-never-match-give-an-unexplained-empty-page) | 2026-11-08 | UI | A source and category that never match give an unexplained empty page | Fixed |
+| [ISS-039](#iss-039-an-empty-group-of-choices-silently-meant-all) | 2026-11-09 | UI | An empty group of choices silently meant "all" | Fixed |
 
 ---
 
@@ -545,3 +549,87 @@ them, so each entry records not only the fix but *why* it happened and what to d
 - **Lesson:** when one resilience pipeline runs inside another, the outer time limit is the real one.
 - **Guarded by:** `ProviderWiringTests.Start_up_refuses_a_token_time_limit_that_does_not_fit_in_an_attempt`,
   `Default_token_time_limit_fits_in_an_attempt` and `A_failed_token_request_is_tried_once`.
+
+## ISS-036: The patterns log shows the project references as a chain
+
+- **Symptom:** found while explaining how the projects depend on each other. "Layered architecture with inward
+  dependencies" in `patterns.md` says "Api → Infrastructure → Core". That reads as a chain, where Api reaches Core
+  only through Infrastructure.
+- **Root cause:** the real references are different. Api references both Core and Infrastructure. Infrastructure
+  references Core. Core references no other project. Api uses Core's types in its controllers, and uses
+  Infrastructure only once, in `Program`, to call `AddInfrastructure`. DEC-003 describes it correctly ("dependencies
+  point inwards only"). The patterns entry shortened it.
+- **Fix:** the patterns entry now lists the three references one by one. It says that Api uses Infrastructure only
+  in `Program`, and that Core owns the interface Infrastructure implements.
+- **Lesson:** an arrow diagram is a claim. Check it against the `.csproj` files.
+- **Guarded by:** nothing (documentation only).
+
+## ISS-037: Duplicate source names are found on the first request, not at start-up
+
+- **Symptom:** found while reviewing `AggregationService`. Its constructor says "Refuse to start when two sources
+  share a name". It does not refuse to start.
+- **Root cause:** `AggregationService` is registered as scoped, so it is created once per request, not at start-up.
+  With two sources of the same name, the app starts normally. Then every request to `/aggregation`, `/sources` and
+  `/statistics` fails with HTTP 500, because each one creates the service. The check also runs again on every
+  request, although the list of sources never changes.
+- **Fix:** the check moved from the `AggregationService` constructor to `ProviderConfigurationReporter.StartAsync`.
+  That method already reads every registered source when the app starts. If it throws, the host stops, so the app
+  now really refuses to start. It also uses `CountBy`, which counts names directly instead of building groups. The
+  old test `AggregationServiceTests.Rejects_providers_with_duplicate_names` was removed, because the service no
+  longer checks names.
+- **Lesson:** a check in a constructor runs when the object is created. Know the object's lifetime before saying
+  when the check runs.
+- **Guarded by:** `ProviderConfigurationReporterTests.Duplicate_source_names_stop_start_up`.
+
+## ISS-038: A source and category that never match give an unexplained empty page
+
+- **Symptom:** a search for "megaman" with source Steam and category Game info shows Steam with "10 items", and
+  then "0 results" with "No items match the search and filters."
+- **Root cause:** each source produces only some categories. Steam and speedrun.com give `PlayerActivity`, RAWG and
+  IGDB give `GameInfo`, and CheapShark gives `Deal`. Steam fetched 10 items, and the category filter then removed
+  all of them, because none is `GameInfo`. The source card counts items before filtering. Nothing tells the user
+  that this combination can never match, and nothing in the code records which source gives which category. That
+  is decided only inside each provider's `Map` method.
+- **Fix:** see DEC-033.
+  - Each provider declares its categories in the new `IGameDataProvider.Categories`.
+  - `AggregationService` skips a source that gives none of the chosen categories: it is not called and not listed.
+  - A request that leaves no source at all, such as `sources=Steam&categories=GameInfo`, gets a `400` that says what
+    each chosen source gives (`AggregationRequest.Validate`).
+  - `/api/v1/sources` returns each source with its categories.
+  - In the browser UI, impossible choices are disabled with the HTML `disabled` attribute, and a list under the
+    filters says why each one is unavailable. A tick on a disabled choice is kept and comes back when the choice
+    can match again.
+  - Each source card shows "10 found · 3 match" (the new `SourceResult.MatchCount`), and an empty page says
+    whether the sources found nothing or the filters removed what they found.
+- **Lesson:** a filter that can only ever remove everything should either be prevented or explained. And when two
+  groups of choices limit each other, each must adapt to what the user wants in the other group, not only to what
+  is ticked. Otherwise each group locks the other and the user cannot get back.
+- **Guarded by:** `AggregationServiceTests.Skips_sources_that_cannot_give_a_chosen_category`,
+  `Reports_how_many_items_of_each_source_match_the_filters` and `Lists_each_source_with_its_categories`.
+  `AggregationEndpointTests.Skips_chosen_sources_that_cannot_give_a_chosen_category`,
+  `A_choice_no_source_can_answer_is_refused_with_what_each_source_gives` and
+  `Each_source_reports_how_many_of_its_items_match`.
+  `UiAndSourcesEndpointTests.Sources_endpoint_lists_every_enabled_source_in_query_order_with_its_categories`. Each
+  provider test checks that every mapped item has a declared category. The UI behaviour was checked by hand in the
+  browser, since the project has no browser tests.
+
+## ISS-039: An empty group of choices silently meant "all"
+
+- **Symptom:** reported by the project owner after the ISS-038 fix. With only Steam ticked and no category ticked,
+  the search used Player activity, but no category looked selected. With nothing ticked at all, the search still ran
+  on every source and category. The Search button was always enabled.
+- **Root cause:** the page copied the API's rule that a missing `sources` or `categories` means "all". That rule
+  suits an API, where a client leaves out a filter it does not need. On a page it hides what the search really uses.
+- **Fix:** in `app.js` (see DEC-034):
+  - a search needs at least one ticked source and one ticked category. While a group is empty, the Search button is
+    disabled (`updateSearchAvailability`), and a message under the search box says what is missing, even when the
+    filters are folded away. Pressing Enter does nothing either.
+  - when a group is empty and only one of its choices can match, that choice is ticked automatically
+    (`tickOnlyChoiceIfEmpty`). Steam alone now shows Player activity ticked. The page marks that tick as its own,
+    so it does not limit the other group.
+  - an empty group does not limit the other group while the user is still choosing (`wantedValues`).
+  - a link with an empty or unknown list, such as `categories=` or `sources=Twitter`, opens with every choice ticked.
+- **Lesson:** a shortcut that suits an API can mislead on a page. What the page shows must be what the search uses.
+- **Guarded by:** nothing automatic, since the project has no browser tests. It was checked by hand in the browser
+  with about 20 combinations of clicks and links, on a desktop and a phone-sized screen.
+

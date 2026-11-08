@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using GameDataAggregator.Core.Models;
 using GameDataAggregator.IntegrationTests.Infrastructure;
 
 namespace GameDataAggregator.IntegrationTests;
@@ -22,15 +23,18 @@ public sealed class UiAndSourcesEndpointTests : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    /// <summary>Checks that every enabled source is listed, in the order they are searched.</summary>
+    /// <summary>Checks that every enabled source is listed, in the order they are searched, with the categories it gives.</summary>
     [Fact]
-    public async Task Sources_endpoint_lists_every_enabled_source_in_query_order()
+    public async Task Sources_endpoint_lists_every_enabled_source_in_query_order_with_its_categories()
     {
         //  Ask for the sources.
-        var sources = await _client.GetFromJsonAsync<string[]>("/api/v1/sources", Ct);
+        var sources = (await _client.GetFromJsonAsync<SourceInfo[]>("/api/v1/sources", ApiJson.Options, Ct))!;
 
-        //  Expect all five, in search order.
-        Assert.Equal(["RAWG", "CheapShark", "Steam", "IGDB", "Speedrun"], sources!);
+        //  Expect all five, in search order, each with its one category.
+        Assert.Equal(["RAWG", "CheapShark", "Steam", "IGDB", "Speedrun"], sources.Select(s => s.Name));
+        Assert.Equal(
+            [ItemCategory.GameInfo, ItemCategory.Deal, ItemCategory.PlayerActivity, ItemCategory.GameInfo, ItemCategory.PlayerActivity],
+            sources.Select(s => Assert.Single(s.Categories)));
     }
 
     /// <summary>Checks that a switched-off source is not listed.</summary>
@@ -42,10 +46,10 @@ public sealed class UiAndSourcesEndpointTests : IAsyncDisposable
         using var client = factory.CreateClient();
 
         //  Ask for the sources.
-        var sources = await client.GetFromJsonAsync<string[]>("/api/v1/sources", Ct);
+        var sources = (await client.GetFromJsonAsync<SourceInfo[]>("/api/v1/sources", ApiJson.Options, Ct))!.Select(s => s.Name);
 
         //  Expect every source except Steam.
-        Assert.Equal(["RAWG", "CheapShark", "IGDB", "Speedrun"], sources!);
+        Assert.Equal(["RAWG", "CheapShark", "IGDB", "Speedrun"], sources);
     }
 
     /// <summary>Checks that the browser page and its files are served, and always checked for updates.</summary>

@@ -13,6 +13,13 @@ public interface IGameDataProvider
     string Name { get; }
 
     /// <summary>
+    /// Every category this provider's items can have. The aggregation service skips the provider when a search asks
+    /// only for other categories, and the browser UI disables the choices that cannot match. Every item from
+    /// <see cref="FetchAsync"/> must have one of these categories.
+    /// </summary>
+    IReadOnlySet<ItemCategory> Categories { get; }
+
+    /// <summary>
     /// Why the provider cannot be called, e.g. "API key is not configured"; <see langword="null"/> when it is ready.
     /// The aggregation service checks this before calling <see cref="FetchAsync"/> and reports the source as
     /// <see cref="Models.SourceStatus.NotConfigured"/>, so a known configuration gap never costs an exception,

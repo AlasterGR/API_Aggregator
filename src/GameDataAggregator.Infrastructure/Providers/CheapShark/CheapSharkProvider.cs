@@ -32,6 +32,9 @@ public sealed partial class CheapSharkProvider(
 
     public string Name => SourceName;
 
+    /// <summary>The only category of item this source gives.</summary>
+    public IReadOnlySet<ItemCategory> Categories { get; } = new HashSet<ItemCategory> { ItemCategory.Deal };
+
     /// <summary>Finds deals for the game, labelled with the store names.</summary>
     public async Task<IReadOnlyList<AggregatedItem>> FetchAsync(string search, CancellationToken cancellationToken)
     {

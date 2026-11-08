@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GameDataAggregator.Api.Validation;
+using GameDataAggregator.Core.Aggregation;
 using GameDataAggregator.Core.Models;
 
 namespace GameDataAggregator.Api.Contracts;
@@ -73,6 +74,20 @@ public sealed class AggregationRequest : IValidatableObject
         if (From > To)
         {
             yield return new ValidationResult("'from' must be earlier than or equal to 'to'.", [nameof(From), nameof(To)]);
+        }
+
+        //  Reject a choice of sources and categories that no source can answer, and say what each source gives.
+        var aggregation = (IAggregationService?)validationContext.GetService(typeof(IAggregationService))
+            ?? throw new InvalidOperationException($"{nameof(IAggregationService)} is not registered.");
+        var query = ToQuery();
+        if (!aggregation.Sources.Any(source => source.IsSelectedBy(query)))
+        {
+            var chosen = aggregation.Sources.Where(s => query.Sources.Count == 0 || query.Sources.Contains(s.Name));
+            var whatEachGives = chosen.Select(s => $"{s.Name} gives {string.Join(" and ", s.Categories)}.");
+            yield return new ValidationResult(
+                $"None of the chosen sources gives the chosen categories ({string.Join(", ", query.Categories)}). " +
+                string.Join(" ", whatEachGives),
+                [nameof(Sources), nameof(Categories)]);
         }
     }
 }

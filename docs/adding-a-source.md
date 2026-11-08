@@ -214,11 +214,12 @@ Notes:
 
 ## Step 4: Write the provider class
 
-The provider is the heart of your source. It implements the interface `IGameDataProvider`, which has three members:
+The provider is the heart of your source. It implements the interface `IGameDataProvider`, which has four members:
 
 | Member | Required? | What it does |
 |---|---|---|
 | `Name` | Yes | The source's name. It is shown in answers, in statistics and in the `sources` filter. It must be unique. |
+| `Categories` | Yes | Every category your items can have, for example only `GameInfo`. Searches that ask only for other categories skip your source, and the browser UI disables the choices that cannot match. Every item you return must have one of these categories. |
 | `ConfigurationError` | No | Says why the source cannot be used, for example "API key is not configured". It returns `null` when the source is ready. Leave it out if your API needs no settings. |
 | `FetchAsync(search, cancellationToken)` | Yes | Calls the API and turns the answer into a list of `AggregatedItem`. |
 
@@ -240,6 +241,9 @@ public sealed class GameReviewsProvider(HttpClient httpClient, IOptions<GameRevi
     public const string SourceName = "GameReviews";
 
     public string Name => SourceName;
+
+    /// <summary>The only category of item this source gives.</summary>
+    public IReadOnlySet<ItemCategory> Categories { get; } = new HashSet<ItemCategory> { ItemCategory.GameInfo };
 
     /// <summary>Searches the review site for the game and returns its reviews.</summary>
     public async Task<IReadOnlyList<AggregatedItem>> FetchAsync(string search, CancellationToken cancellationToken)
@@ -697,13 +701,14 @@ The categories are fixed in [`ItemCategory.cs`](../src/GameDataAggregator.Core/M
 `GameInfo`, `Deal` and `PlayerActivity`. Pick the closest one if you can. If none fits, for example for live
 streams, add a new value, such as `StreamActivity`.
 
-A new category needs two more changes:
+A new category needs three more changes:
 
 1. **The browser UI.** Add the value to the `CATEGORIES` list and to `CATEGORY_LABELS` at the top of
    [`wwwroot/js/app.js`](../src/GameDataAggregator.Api/wwwroot/js/app.js). The UI does not read categories from the
    API, so it does not show a new one by itself.
 2. **The documentation.** The list of valid values in the README and in `AggregationRequest.cs` mentions the
    categories by name.
+3. **Your provider's `Categories`.** List the new value there, or searches for it will skip your source.
 
 The API itself checks categories against the enum, so `categories=StreamActivity` is accepted automatically.
 
@@ -736,6 +741,7 @@ The same is true for a new kind of date. If none of `Released`, `PriceUpdated` a
 - [ ] The models are `internal` records with only the fields you use.
 - [ ] The provider implements `IGameDataProvider`, uses a `SourceName` constant, passes the `cancellationToken`,
       escapes the search text and does not catch exceptions.
+- [ ] `Categories` lists every category the provider's items can have.
 - [ ] `ConfigurationError` is implemented if the API needs a key.
 - [ ] The registration method calls `AddGameDataProvider<GameReviewsProvider, GameReviewsOptions>`.
 - [ ] One new line in `InfrastructureServiceCollectionExtensions.AddInfrastructure`.

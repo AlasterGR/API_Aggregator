@@ -8,8 +8,8 @@ namespace GameDataAggregator.Core.Aggregation;
 /// </summary>
 public static class ItemQueryProcessor
 {
-    /// <summary>Filters, sorts and pages the items, and counts how many matched.</summary>
-    public static (IReadOnlyList<AggregatedItem> Page, int TotalCount) Apply(
+    /// <summary>Filters, sorts and pages the items, and counts how many matched, in total and per source.</summary>
+    public static (IReadOnlyList<AggregatedItem> Page, int TotalCount, IReadOnlyDictionary<string, int> MatchCountBySource) Apply(
         IEnumerable<AggregatedItem> items,
         AggregationQuery query)
     {
@@ -24,7 +24,12 @@ public static class ItemQueryProcessor
             .Take(query.PageSize)
             .ToList();
 
-        return (page, filtered.Count);
+        //  Count the matching items of each source, on all pages together.
+        var matchCountBySource = filtered
+            .CountBy(i => i.Source, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(StringComparer.OrdinalIgnoreCase);
+
+        return (page, filtered.Count, matchCountBySource);
     }
 
     /// <summary>Keeps only the items that pass every filter in the query.</summary>

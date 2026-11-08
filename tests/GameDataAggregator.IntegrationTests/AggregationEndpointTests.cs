@@ -136,6 +136,50 @@ public sealed class AggregationEndpointTests : IAsyncDisposable
         Assert.DoesNotContain(_factory.ExternalApis.Requests, uri => uri.Host is "api.rawg.io" or "www.cheapshark.com" or "api.igdb.com" or "id.twitch.tv" or "www.speedrun.com");
     }
 
+    /// <summary>Checks that a chosen source that cannot give a chosen category is neither called nor listed.</summary>
+    [Fact]
+    public async Task Skips_chosen_sources_that_cannot_give_a_chosen_category()
+    {
+        //  Ask Steam and RAWG for game info, which only RAWG gives.
+        var result = await GetResultAsync("search=witcher&sources=Steam,RAWG&categories=GameInfo");
+
+        //  Expect only RAWG in the answer, all of its items matching, and no call to Steam.
+        var rawg = Assert.Single(result.Sources);
+        Assert.Equal("RAWG", rawg.Source);
+        Assert.Equal(rawg.ItemCount, rawg.MatchCount);
+        Assert.DoesNotContain(_factory.ExternalApis.Requests, uri => uri.Host is "store.steampowered.com" or "api.steampowered.com");
+    }
+
+    /// <summary>Checks that a choice no source can answer is refused with an explanation, without calling anything.</summary>
+    [Fact]
+    public async Task A_choice_no_source_can_answer_is_refused_with_what_each_source_gives()
+    {
+        //  Ask Steam for game info.
+        var response = await _client.GetAsync("/api/v1/aggregation?search=megaman&sources=Steam&categories=GameInfo", Ct);
+
+        //  Expect a validation error that says what Steam gives, and no call to any source.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(Ct);
+        Assert.Contains("Steam gives PlayerActivity.", body, StringComparison.Ordinal);
+        Assert.Empty(_factory.ExternalApis.Requests);
+    }
+
+    /// <summary>Checks that each source reports how many of its items pass the filters.</summary>
+    [Fact]
+    public async Task Each_source_reports_how_many_of_its_items_match()
+    {
+        //  Search every source for items tagged "RPG".
+        var result = await GetResultAsync("search=witcher&tag=RPG&pageSize=100");
+
+        //  Expect each source's match count to equal its items on the page, and never to exceed what it found.
+        Assert.All(result.Sources, source =>
+        {
+            Assert.Equal(result.Items.Count(i => i.Source == source.Source), source.MatchCount);
+            Assert.InRange(source.MatchCount, 0, source.ItemCount);
+        });
+        Assert.Equal(result.TotalCount, result.Sources.Sum(s => s.MatchCount));
+    }
+
     /// <summary>Checks that one source being down still leaves a useful answer.</summary>
     [Fact]
     public async Task An_unavailable_api_degrades_the_response_instead_of_failing_it()

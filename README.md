@@ -103,7 +103,12 @@ plain HTML, CSS and JavaScript, so there is no build step and nothing to install
 
 - **Search tab:**
   - a search box with every filter and sort option, plus a status card per source (`Live`, `Cached`, `Fallback`,
-    `Failed` or `Not configured`, item count, time taken, and why a source failed);
+    `Failed` or `Not configured`, items found and how many match, time taken, and why a source failed);
+  - source and category choices that cannot match each other are disabled, and a list under the filters says why.
+    When only one category (or source) can match, it is ticked automatically.
+  - a search needs at least one ticked source and one ticked category. While a group is empty, the **Search** button
+    is disabled and a message under the search box says what is missing. (The API itself still reads a missing
+    `sources` or `categories` as "all".)
   - result cards with images, tags, metrics and details, and paging;
   - validation errors shown as returned by the API.
 - **Request URL:** each search shows the exact request it sent, with a **Copy URL** button for Postman or curl. The
@@ -153,7 +158,7 @@ subject to CORS either. Only a browser app hosted on a *different* origin would 
 | `GET` | `/api/v1/aggregation` | Required | Search all sources and return aggregated, filtered, sorted, paged items |
 | `GET` | `/api/v1/statistics` | Required | Request count and average response time per external API, by performance bucket |
 | `POST` | `/api/v1/auth/token` | - | Issue a short-lived access token (Development only, `404` elsewhere) |
-| `GET` | `/api/v1/sources` | - | Names of the enabled sources (valid values of the `sources` parameter) |
+| `GET` | `/api/v1/sources` | - | The enabled sources and the categories each gives, e.g. `{ "name": "Steam", "categories": ["PlayerActivity"] }`. The names are the valid values of the `sources` parameter |
 | `GET` | `/health` | - | Liveness check (`Healthy`) |
 | `GET` | `/` | - | Browser UI |
 | `GET` | `/openapi/v1.json`, `/scalar` | - | OpenAPI document and interactive reference (Development) |
@@ -164,7 +169,7 @@ subject to CORS either. Only a browser app hosted on a *different* origin would 
 |---|---|---|---|
 | `search` | string, 2-100 chars | **required** | Game name to search for in every source. Outer spaces are trimmed before the length is checked |
 | `sources` | comma-separated | all | `RAWG`, `CheapShark`, `Steam`, `IGDB`, `Speedrun` (case-insensitive; `GET /api/v1/sources` lists them). Unselected sources are not called |
-| `categories` | comma-separated | all | `GameInfo`, `Deal`, `PlayerActivity` |
+| `categories` | comma-separated | all | `GameInfo`, `Deal`, `PlayerActivity`. A source that gives none of the chosen categories is not called. If no chosen source gives a chosen category (e.g. `sources=Steam&categories=GameInfo`), the answer is `400` and says what each source gives |
 | `tag` | string | - | Only items with this tag: a genre (`RPG`), a store (`GOG`), a platform (`Linux`), `On Sale` |
 | `from`, `to` | ISO 8601 date | - | Inclusive date range on the item's `date`. Undated items are excluded. A value without an offset (`2015-05-18`) is UTC, so `to=2015-05-18` ends at the *start* of that day; use `2015-05-18T23:59:59Z` to include all of it |
 | `sortBy` | enum | `Relevance` | `Relevance`, `Date`, `Title`, `Source` (names only, case-insensitive; numbers are rejected) |
@@ -172,7 +177,7 @@ subject to CORS either. Only a browser app hosted on a *different* origin would 
 | `page` | int, 1-1000 | `1` | 1-based page number |
 | `pageSize` | int, 1-100 | `20` | Items per page |
 
-**Example:** `GET /api/v1/aggregation?search=witcher 3&categories=Deal&sortBy=Date&pageSize=1`
+**Example:** `GET /api/v1/aggregation?search=witcher 3&tag=On Sale&sortBy=Date&pageSize=1`
 
 ```json
 {
@@ -196,9 +201,9 @@ subject to CORS either. Only a browser app hosted on a *different* origin would 
     }
   ],
   "sources": [
-    { "source": "RAWG", "status": "Live", "itemCount": 10, "fetchedAt": "2026-11-07T10:14:52Z", "durationMs": 412.3 },
-    { "source": "CheapShark", "status": "Cached", "itemCount": 7, "fetchedAt": "2026-11-07T10:12:01Z", "durationMs": 0.2 },
-    { "source": "Steam", "status": "Fallback", "itemCount": 6, "fetchedAt": "2026-11-07T09:40:10Z", "durationMs": 15002.1,
+    { "source": "RAWG", "status": "Live", "itemCount": 10, "matchCount": 0, "fetchedAt": "2026-11-07T10:14:52Z", "durationMs": 412.3 },
+    { "source": "CheapShark", "status": "Cached", "itemCount": 7, "matchCount": 7, "fetchedAt": "2026-11-07T10:12:01Z", "durationMs": 0.2 },
+    { "source": "Steam", "status": "Fallback", "itemCount": 6, "matchCount": 0, "fetchedAt": "2026-11-07T09:40:10Z", "durationMs": 15002.1,
       "error": "The external API did not respond in time." }
   ]
 }
@@ -225,6 +230,10 @@ subject to CORS either. Only a browser app hosted on a *different* origin would 
 | `Fallback` | The API failed. The last successful response was served instead, and `error` says why |
 | `Failed` | The API failed and no earlier data exists. The source contributes no items |
 | `NotConfigured` | A required setting such as an API key is missing, so the API was not called. `error` names the setting |
+
+Each entry also has `itemCount`, the items the source found for the search, and `matchCount`, how many of them
+pass the filters on all pages together. A source that cannot give any chosen category is left out of `sources`, because
+it is not called.
 
 **Errors** use [RFC 9457 problem details](https://www.rfc-editor.org/rfc/rfc9457) (`application/problem+json`).
 A `400` lists every invalid field at once, so a client can fix them all in one go:

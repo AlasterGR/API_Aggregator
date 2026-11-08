@@ -68,6 +68,9 @@ public sealed class IgdbProviderTests
         //  Search it.
         var items = await provider.FetchAsync("witcher", Ct);
 
+        //  Expect every item to have a category the source declares.
+        Assert.All(items, item => Assert.Contains(item.Category, provider.Categories));
+
         //  Expect every detail of the first game to be copied across.
         Assert.Equal(2, items.Count);
         var witcher3 = items[0];

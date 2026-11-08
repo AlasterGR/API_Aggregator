@@ -29,8 +29,11 @@ public sealed record SourceResult
 
     public required SourceStatus Status { get; init; }
 
-    /// <summary>Items this provider contributed, before filtering.</summary>
+    /// <summary>Items this provider found for the search, before filtering.</summary>
     public required int ItemCount { get; init; }
+
+    /// <summary>Items from this provider that pass the filters, on all pages together.</summary>
+    public int MatchCount { get; init; }
 
     /// <summary>When the data was fetched from the external API. Older than now for Cached and Fallback.</summary>
     public DateTimeOffset? FetchedAt { get; init; }

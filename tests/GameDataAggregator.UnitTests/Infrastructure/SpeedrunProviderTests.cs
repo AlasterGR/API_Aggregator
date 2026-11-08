@@ -62,6 +62,9 @@ public sealed class SpeedrunProviderTests
         //  Search it.
         var items = await provider.FetchAsync("witcher", Ct);
 
+        //  Expect every item to have a category the source declares.
+        Assert.All(items, item => Assert.Contains(item.Category, provider.Categories));
+
         //  Expect the first game's basic details to be copied across.
         Assert.Equal(2, items.Count);
         var witcher3 = items[0];

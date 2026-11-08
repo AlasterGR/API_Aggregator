@@ -121,7 +121,7 @@ public sealed class ItemQueryProcessorTests
         var query = Query(q => q with { SortBy = SortField.Title, SortDirection = SortDirection.Ascending, Page = 2, PageSize = 3 });
 
         //  Apply it.
-        var (page, total) = ItemQueryProcessor.Apply(Items, query);
+        var (page, total, _) = ItemQueryProcessor.Apply(Items, query);
 
         //  Expect the last title alone, and the full total.
         Assert.Equal(4, total);
@@ -133,7 +133,7 @@ public sealed class ItemQueryProcessorTests
     public void Page_beyond_the_end_is_empty_but_still_reports_total_count()
     {
         //  Ask for a page far past the end.
-        var (page, total) = ItemQueryProcessor.Apply(Items, Query(q => q with { Page = 10, PageSize = 10 }));
+        var (page, total, _) = ItemQueryProcessor.Apply(Items, Query(q => q with { Page = 10, PageSize = 10 }));
 
         //  Expect no items, but the full total.
         Assert.Empty(page);
